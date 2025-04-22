@@ -129,4 +129,24 @@ uint32_t rand32() {
   return (uint32_t) rand();
 }
 
+void fp32_print(uint32_t *src, uint64_t vlen) {
+    if (src == NULL) {
+        printf("Error: Null pointer passed to fp32_print\n");
+        return;
+    }
+
+    float *fsrc = (float*)src;   // 强制转换成 float 指针
+
+    // 将位宽转为浮点数数量
+    uint64_t num_floats = vlen / 8 / sizeof(float);  
+
+    for (uint64_t j = 0; j < num_floats; j++) {     // 正序遍历
+        printf("%12.4f ", fsrc[j]);
+        if ((j + 1) % 4 == 0) {                     // 每行输出4个数
+            printf("\n");
+        }
+    }
+}
+
+
 #endif

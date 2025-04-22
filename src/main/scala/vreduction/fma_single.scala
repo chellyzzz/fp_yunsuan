@@ -1,14 +1,16 @@
-package vector
+package fp_yunsuan
 
 import chisel3._
 import chisel3.util._
 import chisel3.stage._
-import javax.swing.InputMap
-import vector._
-import scala.collection.mutable.ListBuffer
-import Vreduction._
 
-class GFloatFMA() extends Module with Params {
+import fp_yunsuan._
+
+class SingleWidthFloatFMA(    
+  val exponentWidth     : Int = 8,
+  val significandWidth  : Int = 24
+  ) extends Module{
+  val floatWidth = exponentWidth + significandWidth
   val io = IO(new Bundle() {
     val fire                 = Input (Bool())
     val fp_a, fp_b, fp_c     = Input (UInt(floatWidth.W))  // fp_a->VS2,fp_b->VS1,fp_c->VD
@@ -22,7 +24,7 @@ class GFloatFMA() extends Module with Params {
     val fp_cIsFpCanonicalNAN = Input(Bool())
   })
 
-  def shiftLeftWithMux(srcValue: UInt, shiftValue: UInt): UInt = {
+ def shiftLeftWithMux(srcValue: UInt, shiftValue: UInt): UInt = {
     val vecLength  = shiftValue.getWidth + 1
     val res_vec    = Wire(Vec(vecLength,UInt(srcValue.getWidth.W)))
     res_vec(0)    := srcValue
@@ -74,7 +76,6 @@ class GFloatFMA() extends Module with Params {
   val is_fp_reg1            = RegEnable(is_fp_reg0, fire_reg0)
   val is_fp_reg2            = RegEnable(is_fp_reg1, fire_reg1)
 
-  //??
   val rshiftBasic          = significandWidth + 3
   val rshiftMax            = 3*significandWidth + 4
 
@@ -201,6 +202,7 @@ class GFloatFMA() extends Module with Params {
   ) + 1.U(1.W)
 
 
+  //
   val fp_c_rshift_result_high_inv_add1_fp = fp_c_rshift_result_high_inv_add1(significandWidth+2,0)
 
   val adder       = Cat(Mux(adder_lowbit.head(1).asBool, fp_c_rshift_result_high_inv_add1_fp, fp_c_rshift_result_high_inv_add0),adder_lowbit.tail(1),
@@ -401,3 +403,68 @@ class GFloatFMA() extends Module with Params {
   )
 
 }
+
+class BoothEncoder(
+                                              width :Int = 53,
+                                              is_addend_expand_1bit : Boolean = true
+                                            ) extends Module{
+  val addend_seq_width = if (is_addend_expand_1bit) 2*width+1 else 2*width
+  val outNum  = width/2 + 1
+  val io = IO(new Bundle() {
+    val in_a   = Input(UInt(width.W))
+    val in_b   = Input(UInt(width.W))
+    val out_pp = Output(Vec(outNum,UInt(addend_seq_width.W)))
+  })
+  val in_b_cat = Cat(Fill(2- (width % 2),0.U),io.in_b,0.U)
+
+  //get booth encode
+  val booth_seq = Wire(Vec(outNum,UInt(3.W)))
+  val booth_4bit_onehot = Wire(Vec(outNum,UInt(4.W)))
+  for (i <- 0 until outNum) {
+    booth_seq(i) := in_b_cat(i*2+2,i*2)
+    booth_4bit_onehot(i) := 0.U
+    switch(booth_seq(i)){
+      is("b001".U) {booth_4bit_onehot(i) := "b1000".U}
+      is("b010".U) {booth_4bit_onehot(i) := "b1000".U}
+      is("b011".U) {booth_4bit_onehot(i) := "b0100".U}
+      is("b100".U) {booth_4bit_onehot(i) := "b0001".U}
+      is("b101".U) {booth_4bit_onehot(i) := "b0010".U}
+      is("b110".U) {booth_4bit_onehot(i) := "b0010".U}
+    }
+  }
+  //generate partial products
+  val pp_seq_f16 = Wire(Vec(outNum,UInt((width+1).W)))
+  val sign_seq = Wire(Vec(outNum,UInt(1.W)))
+  for (i <- 0 until outNum) {
+    sign_seq(i) := booth_4bit_onehot(i)(1) | booth_4bit_onehot(i)(0)
+    //f16
+    pp_seq_f16(i) := Fill(width + 1, booth_4bit_onehot(i)(3)) & Cat(0.U, io.in_a) |
+      Fill(width + 1, booth_4bit_onehot(i)(2)) & Cat(io.in_a, 0.U) |
+      Fill(width + 1, booth_4bit_onehot(i)(1)) & Cat(1.U, ~io.in_a) |
+      Fill(width + 1, booth_4bit_onehot(i)(0)) & Cat(~io.in_a, 1.U)
+  }
+  val addend_seq_f16 = Wire(Vec(outNum,UInt(addend_seq_width.W)))
+  val outNumBeforeLast = outNum-2
+  val outNumLast = outNum-1
+  for (i <- 0 until outNum) {
+    val head_first_one_width = width - 4 - 2 * (i - 1)
+    val tail_zero_width = 2 * (i - 1)
+    i match {
+      case 0 => addend_seq_f16(i) := Cat(0.U((width - 4).W), ~sign_seq(i), sign_seq(i), sign_seq(i), pp_seq_f16(0))
+      case 1 => addend_seq_f16(i) := Cat(1.U(head_first_one_width.W), ~sign_seq(i), pp_seq_f16(i), 0.U, sign_seq(i - 1))
+      case `outNumBeforeLast` =>
+        if (width % 2 == 0) {
+          if (is_addend_expand_1bit) addend_seq_f16(i) := Cat(1.U, ~sign_seq(i), pp_seq_f16(i), 0.U, sign_seq(i - 1), 0.U(tail_zero_width.W))
+          else addend_seq_f16(i) := Cat(~sign_seq(i), pp_seq_f16(i), 0.U, sign_seq(i - 1), 0.U(tail_zero_width.W))
+        }
+        else addend_seq_f16(i) := Cat(1.U, ~sign_seq(i), pp_seq_f16(i), 0.U, sign_seq(i - 1), 0.U(tail_zero_width.W))
+      case `outNumLast` =>
+        if (width % 2 == 0) addend_seq_f16(i) := Cat(pp_seq_f16(i).tail(1), 0.U, sign_seq(i - 1), 0.U((2 * (i - 1)).W))
+        else if (is_addend_expand_1bit) addend_seq_f16(i) := Cat(1.U, pp_seq_f16(i), 0.U, sign_seq(i - 1), 0.U(tail_zero_width.W))
+        else addend_seq_f16(i) := Cat(pp_seq_f16(i), 0.U, sign_seq(i - 1), 0.U((2 * (i - 1)).W))
+      case _ => addend_seq_f16(i) := Cat(1.U(head_first_one_width.W), ~sign_seq(i), pp_seq_f16(i), 0.U, sign_seq(i - 1), 0.U(tail_zero_width.W))
+    }
+  }
+  io.out_pp := addend_seq_f16
+}
+

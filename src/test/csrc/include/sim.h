@@ -3,8 +3,7 @@
 
 #include <stdint.h>
 
-#define VLEN 512
-#define XLEN 32
+#define XLEN 64
 void single_cycle();
 void reset(int n);
 void sim_init(int argc, char *argv[]);
@@ -13,17 +12,13 @@ void sim_main(int argc, char *argv[]);
 
 
 typedef struct {
-    uint32_t vs1[VLEN/XLEN];
-    uint32_t vs2[VLEN/XLEN];
-    uint32_t vd;
-    uint32_t expected_vd;
-    uint32_t is_vfredsum;
-    uint32_t is_vfredmax;
-    uint32_t vlmul;
-    uint32_t round_mode;
-    uint32_t fp_format;
-    uint32_t is_vec;
-    uint32_t index;
+    uint64_t vs1;
+    uint64_t vs2;
+    uint64_t vs3;
+    uint64_t vd;
+    uint64_t expected_vd;
+    uint64_t round_mode;
+    uint64_t fp_format;
 } IOput;
 
 #endif
