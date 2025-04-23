@@ -65,7 +65,7 @@ void single_cycle() {
 void gen_rand_vctrl() {
 
     Sim_IO.round_mode = 0;
-    Sim_IO.fp_format = 2;
+    Sim_IO.fp_format = 0;
 
     top->io_fire = 1;
     top->io_opcode = 0x0;
@@ -91,10 +91,11 @@ void gen_rand_input() {
     // 9.0	0 10010 0010000000	0x3C00
     // 10.0	0 10010 0100000000	0x4900
 
+
     gen_rand_vctrl();
-    Sim_IO.vs1 = 0x3f800000;
-    Sim_IO.vs2 = 0x3f800000;
-    Sim_IO.vs3 = 0x3f800000;
+    Sim_IO.vs1 = 0x3f80 << 16 | 0x3f80;
+    Sim_IO.vs2 = 0x3f80 << 16 | 0x3f80;
+    Sim_IO.vs3 = 0x3f80 << 16 | 0x3f80;
     get_expected_result();
 
     top->io_vs1 = Sim_IO.vs1;
