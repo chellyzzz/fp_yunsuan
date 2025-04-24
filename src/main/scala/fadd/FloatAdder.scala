@@ -33,18 +33,21 @@ class FloatAdderMixedFP16BF16() extends Module {
     val fflags        = Output(UInt(20.W))
   })
 
-  val is_bf16 = io.fp_format === 0.U
-  val is_fp16 = io.fp_format === 1.U
-  
   val fire = io.fire
+  val fp_format_reg = RegEnable(io.fp_format, fire)
+  val is_bf16 = fp_format_reg === 0.U
+  val is_fp16 = fp_format_reg === 1.U
 
-  val fp16_a_as_fp19_exp_cvt = Wire(UInt(exponentWidthBF16.W))
-  val fp16_b_as_fp19_exp_cvt = Wire(UInt(exponentWidthBF16.W))
+  val fp16_a_as_fp19_exp_cvt    = Wire(UInt(exponentWidthBF16.W))
+  val fp16_b_as_fp19_exp_cvt    = Wire(UInt(exponentWidthBF16.W))
   val fp16_frs1_as_fp19_exp_cvt = Wire(UInt(exponentWidthBF16.W))
 
-  fp16_a_as_fp19_exp_cvt    := io.fp_a.tail(1).head(exponentWidthFP16) + 112.U
-  fp16_b_as_fp19_exp_cvt    := io.fp_b.tail(1).head(exponentWidthFP16) + 112.U
-  fp16_frs1_as_fp19_exp_cvt := io.frs1.tail(1).head(exponentWidthFP16) + 112.U
+  val fp16_a_exp    = 0.U((exponentWidthBF16 - exponentWidthFP16).W) ## io.fp_a.tail(1).head(exponentWidthFP16)
+  val fp16_b_exp    = 0.U((exponentWidthBF16 - exponentWidthFP16).W) ## io.fp_b.tail(1).head(exponentWidthFP16)
+  val fp16_frs_exp  = 0.U((exponentWidthBF16 - exponentWidthFP16).W) ## io.frs1.tail(1).head(exponentWidthFP16)
+  fp16_a_as_fp19_exp_cvt    :=  fp16_a_exp   + 112.U(exponentWidthBF16.W)
+  fp16_b_as_fp19_exp_cvt    :=  fp16_b_exp   + 112.U(exponentWidthBF16.W)
+  fp16_frs1_as_fp19_exp_cvt :=  fp16_frs_exp + 112.U(exponentWidthBF16.W)
 
   val fp16_a_as_fp19 = Cat(io.fp_a(15), fp16_a_as_fp19_exp_cvt, io.fp_a(significandWidthFP16-2,0))
   val fp16_b_as_fp19 = Cat(io.fp_b(15), fp16_b_as_fp19_exp_cvt, io.fp_b(significandWidthFP16-2,0))

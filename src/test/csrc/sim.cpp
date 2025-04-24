@@ -45,7 +45,10 @@ void sim_exit() {
 
 
 void display(){
-
+    float f1 = *(float *)&top->io_vd;
+    printf("--------------------\n");
+    printf("vd: %x\n", top->io_vd);
+    printf("vd: %f\n", f1);
 }
 
 void single_cycle() {
@@ -64,8 +67,8 @@ void single_cycle() {
 
 void gen_rand_vctrl() {
 
-    Sim_IO.round_mode = 0;
-    Sim_IO.fp_format = 0;
+    Sim_IO.round_mode   = 0;
+    Sim_IO.fp_format    = 0;
 
     top->io_fire = 1;
     top->io_opcode = 0x0;
@@ -88,14 +91,25 @@ void gen_rand_input() {
     // 6.0	0 10001 1000000000	0x4600
     // 7.0	0 10001 1100000000	0x46E0
     // 8.0	0 10010 0000000000	0x4800
-    // 9.0	0 10010 0010000000	0x3C00
-    // 10.0	0 10010 0100000000	0x4900
+    // 9.0	0 10010 0010000000	0x4880
+    // 10.0	0 10010 0100000000	0x4200
 
+    // 数值 (Decimal)	BF16 二进制	十六进制 (Hex)
+    // 1.0	0 01111 0000000000	0x3f80
+    // 2.0	0 10000 0000000000	0x4000
+    // 3.0	0 10000 1000000000	0x4040
+    // 4.0	0 10001 0000000000	0x4080
+    // 5.0	0 10001 0100000000	0x40a0
+    // 6.0	0 10001 1000000000	0x40c0
+    // 7.0	0 10001 1100000000	0x40e0
+    // 8.0	0 10010 0000000000	0x4100
+    // 9.0	0 10010 0010000000	0x4110
+    // 10.0	0 10010 0100000000	0x4120
 
     gen_rand_vctrl();
-    Sim_IO.vs1 = 0x3f80 << 16 | 0x3f80;
-    Sim_IO.vs2 = 0x3f80 << 16 | 0x3f80;
-    Sim_IO.vs3 = 0x3f80 << 16 | 0x3f80;
+    Sim_IO.vs1 = 0x4110 << 16 | 0x4110;
+    Sim_IO.vs2 = 0x4120 << 16 | 0x4120;
+    Sim_IO.vs3 = 0x4880 << 16 | 0x4880;
     get_expected_result();
 
     top->io_vs1 = Sim_IO.vs1;
